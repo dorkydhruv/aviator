@@ -7,6 +7,10 @@
   "dependencies": {
     "@solana/actions": "^1.6.5",
     "@solana/web3.js": "^1.95.3",
+    "@types/bs58": "^4.0.4",
+    "bs58": "^6.0.0",
+    "buffer": "^6.0.3",
+    "dotenv": "^16.4.5",
     "hono": "^4.6.5"
   },
   "devDependencies": {

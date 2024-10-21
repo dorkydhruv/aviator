@@ -1,3 +1,5 @@
+import { clusterApiUrl, Connection, PublicKey } from "@solana/web3.js";
+
 export const takeOffs = [
   {
     url: "https://media3.giphy.com/media/UPYDbO9tMrEmpoLGfp/giphy.gif?cid=6c09b952cjsi2vug378babqu6j9og8qxkh7ck1adbr9dki8c&ep=v1_internal_gif_by_id&rid=giphy.gif&ct=g",
@@ -40,3 +42,9 @@ export const takeOffs = [
     crashTime: 4.9,
   },
 ];
+
+export const houseKey = new PublicKey(
+  "8fagLF8Z3Z1tCgNVwZmJ5UESzHTAXLgKZaxb62bZsbQP"
+);
+
+export const connection = new Connection(clusterApiUrl("devnet"), "confirmed");

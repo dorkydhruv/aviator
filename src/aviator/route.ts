@@ -6,17 +6,15 @@ import {
   createPostResponse,
 } from "@solana/actions";
 import { Hono } from "hono";
-import { getRandomInt, startTimer } from "../helpers";
+import { getLamports, getRandomInt, startTimer } from "../helpers";
 import {
-  clusterApiUrl,
-  Connection,
+  Keypair,
   PublicKey,
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import { takeOffs } from "../const";
-import { startTime } from "hono/timing";
-const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
+import bs58 from "bs58";
+import { connection, houseKey, takeOffs } from "../const";
 const app = new Hono();
 
 interface DialectExperimentalFeatures {
@@ -45,49 +43,12 @@ app.get("/", async (c) => {
           label: "Bet 0.1 SOL",
           href: "/aviator/bet/0.1",
         },
-        {
-          type: "post",
-          label: "Debug",
-          href: "/aviator/start",
-        },
       ],
     },
-
     disabled: false,
   };
   return c.json(response, 200);
 });
-
-// app.get("/bet/:amount", async (c) => {
-//   const amount = parseFloat(c.req.param("amount"));
-//   if (isNaN(amount)) {
-//     return c.json(
-//       {
-//         type: "error",
-//         title: "Invalid amount",
-//         description: "The amount must be a number",
-//       },
-//       400
-//     );
-//   }
-//   const response: ActionGetResponse = {
-//     type: "action",
-//     description: `You bet ${amount}, withdraw before the plane crashes`,
-//     title: "Lets see if you can win",
-//     icon: "https://media3.giphy.com/media/UPYDbO9tMrEmpoLGfp/giphy.gif?cid=6c09b952cjsi2vug378babqu6j9og8qxkh7ck1adbr9dki8c&ep=v1_internal_gif_by_id&rid=giphy.gif&ct=g",
-//     label: "Take the risk",
-//     links: {
-//       actions: [
-//         {
-//           type: "post",
-//           label: "Withdraw",
-//           href: "/aviator/withdraw",
-//         },
-//       ],
-//     },
-//   };
-//   return c.json(response, 200);
-// });
 
 app.post("/bet/:amount", async (c) => {
   const amount = parseFloat(c.req.param("amount"));
@@ -111,8 +72,8 @@ app.post("/bet/:amount", async (c) => {
   tx.add(
     SystemProgram.transfer({
       fromPubkey: new PublicKey(account),
-      toPubkey: new PublicKey("8fagLF8Z3Z1tCgNVwZmJ5UESzHTAXLgKZaxb62bZsbQP"),
-      lamports: Math.floor(amount * 1000000000),
+      toPubkey: houseKey,
+      lamports: getLamports(amount),
     })
   );
 
@@ -141,7 +102,7 @@ app.post("/bet/:amount", async (c) => {
                 {
                   type: "transaction",
                   label: "Nah, I give up",
-                  href: "/aviator/withdraw",
+                  href: `/aviator/withdraw/${0}/${0}`,
                 },
               ],
             },
@@ -172,8 +133,8 @@ app.post("/start", async (c) => {
 app.post("/start/:id", async (c) => {
   const id = parseInt(c.req.param("id"));
   const { url, crashTime } = takeOffs[getRandomInt(0, takeOffs.length)];
-  startTimer();
-  console.log("Started the timer");
+  const timme = startTimer();
+  console.log("Started the timer", timme);
   const payload: Action = {
     type: "action",
     title: "Withdraw the bet before the plane crashes",
@@ -186,7 +147,7 @@ app.post("/start/:id", async (c) => {
         {
           type: "transaction",
           label: "I'm out",
-          href: "/aviator/withdraw",
+          href: `/aviator/withdraw/${timme}/${crashTime}`,
         },
       ],
     },
@@ -194,12 +155,104 @@ app.post("/start/:id", async (c) => {
   return c.json(payload, 200);
 });
 
-app.post("/withdraw/:stop",async(c)=>{
+app.post("/withdraw/:stop/:crashTime", async (c) => {
+  const { account }: ActionPostRequest = await c.req.json();
+  const crashTime = parseFloat(c.req.param("crashTime"));
   const stop = parseInt(c.req.param("stop"));
-  if(stop==0){
-
+  let signature: string = "";
+  console.log("Crash time", crashTime);
+  console.log("Stop time", stop);
+  const timeSpent = (new Date().getTime() - stop) / 1000;
+  console.log("Time spent seconds : ", timeSpent);
+  const signer = Keypair.fromSecretKey(
+    bs58.decode(
+      ""
+    )
+  );
+  if (Number(stop) == 0) {
+    //Transfer all the funds back to the player
+    console.log("exit");
+    const tx = new Transaction();
+    tx.feePayer = houseKey;
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: houseKey,
+        toPubkey: new PublicKey(account),
+        lamports: getLamports(0.1),
+      })
+    );
+    tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    tx.lastValidBlockHeight = (
+      await connection.getLatestBlockhash()
+    ).lastValidBlockHeight;
+    tx.sign(signer);
+    signature = await connection.sendTransaction(tx, [signer]);
+    console.log("Transfered funds from house to player", signature);
+  } else {
+    //The player has played the game atleast once
+    const benifit = timeSpent / 10; //aplified the benifit;
+    //TODO: Benifit function should be a curve
+    const amount = benifit * 0.1;
+    console.log("Benifit", benifit);
+    if (crashTime > timeSpent) {
+      //Won the game
+      const tx = new Transaction();
+      tx.feePayer = houseKey;
+      tx.add(
+        SystemProgram.transfer({
+          fromPubkey: houseKey,
+          toPubkey: new PublicKey(account),
+          lamports: getLamports(amount),
+        })
+      );
+      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+      tx.lastValidBlockHeight = (
+        await connection.getLatestBlockhash()
+      ).lastValidBlockHeight;
+      console.log(process.env.HOUSE_PRIVATE_KEY);
+      tx.sign(signer);
+      signature = await connection.sendTransaction(tx, [signer]);
+      console.log("Transfered funds from house to player", signature);
+    } else {
+      //Lost the game
+      console.log("Lost the game");
+    }
   }
-})
+  return c.json(
+    {
+      type: "post",
+      links: {
+        next: {
+          type: "post",
+          href: `/aviator/complete/${signature}`,
+        },
+      },
+    } satisfies ActionPostResponse,
+    200
+  );
+});
+
+app.post("/complete/:sign", async (c) => {
+  const sign = c.req.param("sign");
+  return c.json({
+    type: "action",
+    title: sign != "" ? "You have won the game" : "You have lost the game",
+    label: "LFG 🚀",
+    icon: startAnimation,
+    description:
+      sign != ""
+        ? "You won!\n Let's go again!"
+        : "You lost! \n Let's try again!",
+    links: {
+      actions: [
+        {
+          type: "transaction",
+          label: "Bet 0.1 SOL",
+          href: "/aviator/bet/0.1",
+        },
+      ],
+    },
+  });
+});
 
 export default app;
-
